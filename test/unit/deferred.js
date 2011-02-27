@@ -352,38 +352,38 @@ test( "jQuery.fn.promise", function() {
 		ok( this === div, "Test resolve context is the collection (when)" );
 	});
 
-	d1 = div.addPromise();
+	d1 = div.attachPromise();
 	flag = false;
 	divCopy.promise().done(function( object ) {
-		ok( flag, "Test addPromise with a resolved task works" );
+		ok( flag, "Test attachPromise with a resolved task works" );
 		ok( object === divCopy, "Test resolve value is the collection" );
 		ok( this === divCopy, "Test resolve context is the collection" );
 	});
 	flag = true;
-	jQuery._removePromise( d1 );
+	d1.resolve();
 
-	d1 = div.addPromise();
+	d1 = div.attachPromise();
 	flag = false;
 	divCopy.promise().fail(function() {
-		ok( flag, "Test addPromise with a rejected task works" );
+		ok( flag, "Test attachPromise with a rejected task works" );
 	});
 	flag = true;
-	jQuery._removePromise( d1, false );
+	d1.reject();
 
 	d1 = jQuery.Deferred();
 	flag = false;
-	div.addPromise( d1 );
+	div.attachPromise( d1 );
 	divCopy.promise().done(function() {
-		ok( flag, "Test addPromise with a resolved deferred works" );
+		ok( flag, "Test attachPromise with a resolved deferred works" );
 	});
 	flag = true;
 	d1.resolve();
 
 	d1 = jQuery.Deferred();
 	flag = false;
-	div.addPromise( d1 );
+	div.attachPromise( d1 );
 	divCopy.promise().fail(function() {
-		ok( flag, "Test addPromise with a rejected deferred works" );
+		ok( flag, "Test attachPromise with a rejected deferred works" );
 	});
 	flag = true;
 	d1.reject();
@@ -391,20 +391,20 @@ test( "jQuery.fn.promise", function() {
 	d1 = jQuery.Deferred();
 	d2 = jQuery.Deferred();
 	flag = false;
-	div.addPromise( d1, d2 )
+	div.attachPromise( d1, d2 )
 	divCopy.promise().done(function() {
-		ok( flag, "Test addPromise with two resolved deferreds (2/2)" );
+		ok( flag, "Test attachPromise with two resolved deferreds (2/2)" );
 		flag = "fired";
 	});
 	flag = true;
-	d1.resolve()
-	ok( flag !== "fired", "Test addPromise with two resolved deferreds (1/2)" );
+	d1.resolve();
+	ok( flag !== "fired", "Test attachPromise with two resolved deferreds (1/2)" );
 	d2.resolve();
 
 	d1 = jQuery.Deferred();
 	d2 = jQuery.Deferred();
-	divs.addPromise( d1 );
-	spans.addPromise( d2 );
+	divs.attachPromise( d1 );
+	spans.attachPromise( d2 );
 	flag = 1;
 	divs.promise().done(function() {
 		ok( flag++ === 1, "Test divs are resolved with the first deferred" );

@@ -65,9 +65,7 @@ var pFactories = {
 	// Promise methods
 	pMethods = {},
 	iDeferred,
-	sliceDeferred = [].slice,
-	taskCounter = jQuery.now(),
-	tasks = {};
+	sliceDeferred = [].slice;
 
 // Create promise methods list
 for ( iDeferred = 0; iDeferred < oMethods.length; iDeferred += 2 ) {
@@ -214,71 +212,12 @@ jQuery.extend({
 			deferred.resolve( object );
 		}
 		return promise;
-	},
-
-	// Create a task
-	_startTask: function( elements, promise ) {
-		var id = taskCounter++,
-			i = elements.length,
-			eTasks;
-		function stop() {
-			jQuery._stopTask( id );
-		}
-		tasks[ id ] = {
-			// elements
-			e: elements,
-			// deferred or promise
-			d: promise
-		};
-		while( i-- ) {
-			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
-			if ( !eTasks ) {
-				jQuery.data( elements[ i ], "tasks", ( eTasks = {} ), true );
-			}
-			eTasks[ id ] = true;
-		}
-		if ( promise ) {
-			// We use then so that any Promise/A compliant
-			// implementation can be used here
-			promise.then( stop, stop );
-		}
-		return id;
-	},
-
-	// Tag a task as finished
-	_removePromise: function( id, isComplete ) {
-		var task = tasks[ id ],
-			i,
-			eTasks,
-			key,
-			isEmpty;
-		if ( task ) {
-			delete tasks[ id ];
-			i = task.e.length;
-			while( i-- ) {
-				eTasks = jQuery.data( task.e[ i ], "tasks", undefined, true );
-				delete eTasks[ id ];
-				isEmpty = true;
-				for ( key in eTasks ) {
-					isEmpty = false;
-					break;
-				}
-				if ( isEmpty ) {
-					jQuery.removeData( task.e[ i ], "tasks", true );
-				}
-			}
-			if ( task.d ) {
-				if ( isComplete !== false ) {
-					if ( jQuery.isFunction( task.d.resolve ) ) {
-						task.d.resolve();
-					}
-				} else if( jQuery.isFunction( task.d.reject ) ) {
-					task.d.reject();
-				}
-			}
-		}
 	}
 });
+
+// Attach promises to elements
+var eTaskCounter = jQuery.now(),
+	eTasks = {};
 
 jQuery.extend( jQuery.fn, {
 
@@ -286,7 +225,7 @@ jQuery.extend( jQuery.fn, {
 		var defer = jQuery.Deferred(),
 			elements = this,
 			i = elements.length,
-			eTasks,
+			tasks,
 			id,
 			count = 1,
 			checked = {};
@@ -299,18 +238,15 @@ jQuery.extend( jQuery.fn, {
 			defer.rejectWith( elements, [ elements ] );
 		}
 		while ( i-- ) {
-			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
-			if ( eTasks ) {
-				for ( id in eTasks ) {
+			tasks = jQuery.data( elements[ i ], "eTasks", undefined, true );
+			if ( tasks ) {
+				for ( id in tasks ) {
 					if ( !checked[ id ] ) {
 						checked[ id ] = true;
 						count++;
-						if ( !tasks[ id ].d ) {
-							tasks[ id ].d = jQuery.Deferred();
-						}
 						// We use then so that any Promise/A compliant
 						// implementation can be used here
-						tasks[ id ].d.then( resolve, reject );
+						eTasks[ id ].then( resolve, reject );
 					}
 				}
 			}
@@ -320,37 +256,43 @@ jQuery.extend( jQuery.fn, {
 	},
 
 	// Mark with one or several promises
-	// (or creates a task if no argument provided)
-	addPromise: function( promise ) {
-		if ( promise ) {
-			promise = jQuery.when.apply( jQuery, arguments );
-		}
+	// (or creates a defer and returns it if no argument is provided)
+	attachPromise: function() {
 		var elements = this,
-			id = taskCounter++,
+			id = eTaskCounter++,
+			create = !arguments.length,
+			defer = eTasks[ id ] = create ?
+				jQuery.Deferred() :
+				jQuery.when.apply( jQuery, arguments ),
 			i = elements.length,
-			eTasks;
-		function stop() {
-			jQuery._removePromise( id );
-		}
-		tasks[ id ] = {
-			// elements
-			e: elements,
-			// deferred or promise
-			d: promise
-		};
+			tasks = [];
 		while( i-- ) {
-			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
-			if ( !eTasks ) {
-				jQuery.data( elements[ i ], "tasks", ( eTasks = {} ), true );
+			tasks[ i ] = jQuery.data( elements[ i ], "eTasks", undefined, true );
+			if ( !tasks[ i ] ) {
+				jQuery.data( elements[ i ], "eTasks", ( tasks[ i ] = {} ), true );
 			}
-			eTasks[ id ] = true;
+			tasks[ i ][ id ] = true;
 		}
-		if ( promise ) {
-			// We use then so that any Promise/A compliant
-			// implementation can be used here
-			promise.then( stop, stop );
+		// We use then so that any Promise/A compliant
+		// implementation can be used here
+		// Hence the function declaration
+		function done() {
+			delete eTasks[ id ];
+			i = elements.length;
+			while( i-- ) {
+				delete tasks[ i ][ id ];
+				isEmpty = true;
+				for ( var key in tasks[ i ] ) {
+					isEmpty = false;
+					break;
+				}
+				if ( isEmpty ) {
+					jQuery.removeData( elements[ i ], "eTasks", true );
+				}
+			}
 		}
-		return promise ? this : id;
+		defer.then( done, done );
+		return create ? defer : elements;
 	}
 } );
 

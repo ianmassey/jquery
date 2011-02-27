@@ -112,7 +112,7 @@ jQuery.fn.extend({
 		}
 
 		// Deferred
-		optall.pId = this.addPromise();
+		optall.defer = this.attachPromise();
 
 		return this[ optall.queue === false ? "each" : "queue" ](function() {
 			// XXX 'this' does not always have a nodeName when running the
@@ -290,10 +290,10 @@ jQuery.extend({
 		opt.old = opt.complete;
 		opt.complete = function() {
 			// Deferred
-			var pId = opt.pId;
-			if ( pId ) {
-				opt.pId = undefined;
-				jQuery._removePromise( pId );
+			var defer = opt.defer;
+			if ( defer ) {
+				opt.defer = undefined;
+				defer.resolve();
 			}
 			// Queue
 			if ( opt.queue !== false ) {
