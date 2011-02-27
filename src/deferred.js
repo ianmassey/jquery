@@ -11,7 +11,7 @@ function promiseInvertFactory( invert ) {
 				for( i in pMethods ) {
 					cache[ i ] = invert ?
 						( pMethods[ i ] && promise[ pMethods[ i ] ] ||
-							dFactories[ i ]( cache ) ) :
+							pFactories[ i ]( cache ) ) :
 						promise[ i ];
 				}
 			}
@@ -27,8 +27,8 @@ function promiseInvertFactory( invert ) {
 	};
 }
 
-// Deferred methods factories
-var dFactories = {
+// Promise methods factories
+var pFactories = {
 		always: function( promise ) {
 			return function() {
 				var args = sliceDeferred.call( arguments, 0 );
@@ -38,13 +38,17 @@ var dFactories = {
 		},
 		chain: function( promise ) {
 			return function( fn ) {
-				return jQuery.Deferred(function( defer ) {
-					promise.done(function() {
-						jQuery.when( fn.apply( this, arguments ) )
-							.done( defer.resolve )
-							.fail( defer.reject );
-					}).fail( defer.reject );
-				}).promise();
+				var defer = jQuery.Deferred(),
+					next;
+				promise.done(function() {
+					next = fn.apply( this, arguments );
+					if ( jQuery.isFunction( next.promise ) ) {
+						next.promise().then( defer.resolve, defer.reject );
+					} else {
+						defer.resolve( next );
+					}
+				}).fail( defer.reject );
+				return defer.promise();
 			};
 		},
 		invert: promiseInvertFactory( true ),
@@ -56,24 +60,29 @@ var dFactories = {
 			};
 		}
 	},
+	// Opposed methods
+	oMethods = "always always done fail promise invert isResolved isRejected".split( " " ),
 	// Promise methods
-	pMethods = {
-		always: "always",
-		done: "fail",
-		fail: "done",
-		invert: "promise",
-		isRejected: "isResolved",
-		isResolved: "isRejected",
-		promise: "invert"
-	},
+	pMethods = {},
 	iDeferred,
-	sliceDeferred = [].slice;
+	sliceDeferred = [].slice,
+	taskCounter = jQuery.now(),
+	tasks = {};
+
+// Create promise methods list
+for ( iDeferred = 0; iDeferred < oMethods.length; iDeferred += 2 ) {
+	pMethods[ oMethods[iDeferred] ] = oMethods[ iDeferred + 1 ];
+	pMethods[ oMethods[iDeferred+1] ] = oMethods[ iDeferred ];
+}
+
+oMethods = undefined;
 
 // Add methods with no invert
-for( iDeferred in dFactories ) {
+for( iDeferred in pFactories ) {
 	pMethods[ iDeferred ] = pMethods[ iDeferred ] || false;
 }
 
+// Constructors
 jQuery.extend({
 
 	// Create a simple deferred (single callbacks list)
@@ -151,13 +160,13 @@ jQuery.extend({
 		var defer = jQuery._Deferred(),
 			failDefer = jQuery._Deferred(),
 			i;
-		// Add missing pMethods to defer
+		// Add missing methods to defer
 		defer.reject = failDefer.resolve;
 		defer.rejectWith = failDefer.resolveWith;
 		for( i in pMethods ) {
 			defer[ i ] = defer[ i ] ||
 				pMethods[ i ] && failDefer[ pMethods[i] ] ||
-				dFactories[ i ]( defer );
+				pFactories[ i ]( defer );
 		}
 		// Make sure only one callback list will be used
 		defer.done( failDefer.cancel ).fail( defer.cancel );
@@ -172,28 +181,28 @@ jQuery.extend({
 
 	// Deferred helpers
 	when: function( object ) {
-		var length = arguments.length,
-			deferred = length <= 1 && object && jQuery.isFunction( object.promise ) ?
+		var i = arguments.length,
+			deferred = i <= 1 && object && jQuery.isFunction( object.promise ) ?
 				object :
 				jQuery.Deferred(),
 			promise = deferred.promise();
 
-		if ( length > 1 ) {
+		if ( i > 1 ) {
 			var array = sliceDeferred.call( arguments, 0 ),
-				count = length,
-				iCallback = function( index ) {
-					return function( value ) {
-						array[ index ] = arguments.length > 1 ?
+				count = i,
+				iFunction = function( i ) {
+					array[ i ].promise().then( function( value ) {
+						array[ i ] = arguments.length > 1 ?
 								sliceDeferred.call( arguments, 0 ) : value;
 						if ( !( --count ) ) {
 							deferred.resolveWith( promise, array );
 						}
-					};
+					}, deferred.reject );
 				};
-			while( length-- ) {
-				object = array[ length ];
+			while( i-- ) {
+				object = array[ i ];
 				if ( object && jQuery.isFunction( object.promise ) ) {
-					object.promise().then( iCallback(length), deferred.reject );
+					iFunction( i );
 				} else {
 					--count;
 				}
@@ -205,7 +214,144 @@ jQuery.extend({
 			deferred.resolve( object );
 		}
 		return promise;
+	},
+
+	// Create a task
+	_startTask: function( elements, promise ) {
+		var id = taskCounter++,
+			i = elements.length,
+			eTasks;
+		function stop() {
+			jQuery._stopTask( id );
+		}
+		tasks[ id ] = {
+			// elements
+			e: elements,
+			// deferred or promise
+			d: promise
+		};
+		while( i-- ) {
+			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
+			if ( !eTasks ) {
+				jQuery.data( elements[ i ], "tasks", ( eTasks = {} ), true );
+			}
+			eTasks[ id ] = true;
+		}
+		if ( promise ) {
+			// We use then so that any Promise/A compliant
+			// implementation can be used here
+			promise.then( stop, stop );
+		}
+		return id;
+	},
+
+	// Tag a task as finished
+	_removePromise: function( id, isComplete ) {
+		var task = tasks[ id ],
+			i,
+			eTasks,
+			key,
+			isEmpty;
+		if ( task ) {
+			delete tasks[ id ];
+			i = task.e.length;
+			while( i-- ) {
+				eTasks = jQuery.data( task.e[ i ], "tasks", undefined, true );
+				delete eTasks[ id ];
+				isEmpty = true;
+				for ( key in eTasks ) {
+					isEmpty = false;
+					break;
+				}
+				if ( isEmpty ) {
+					jQuery.removeData( task.e[ i ], "tasks", true );
+				}
+			}
+			if ( task.d ) {
+				if ( isComplete !== false ) {
+					if ( jQuery.isFunction( task.d.resolve ) ) {
+						task.d.resolve();
+					}
+				} else if( jQuery.isFunction( task.d.reject ) ) {
+					task.d.reject();
+				}
+			}
+		}
 	}
 });
+
+jQuery.extend( jQuery.fn, {
+
+	promise: function( object ) {
+		var defer = jQuery.Deferred(),
+			elements = this,
+			i = elements.length,
+			eTasks,
+			id,
+			count = 1,
+			checked = {};
+		function resolve() {
+			if ( !( --count ) ) {
+				defer.resolveWith( elements, [ elements ] );
+			}
+		}
+		function reject() {
+			defer.rejectWith( elements, [ elements ] );
+		}
+		while ( i-- ) {
+			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
+			if ( eTasks ) {
+				for ( id in eTasks ) {
+					if ( !checked[ id ] ) {
+						checked[ id ] = true;
+						count++;
+						if ( !tasks[ id ].d ) {
+							tasks[ id ].d = jQuery.Deferred();
+						}
+						// We use then so that any Promise/A compliant
+						// implementation can be used here
+						tasks[ id ].d.then( resolve, reject );
+					}
+				}
+			}
+		}
+		resolve();
+		return defer.promise( object );
+	},
+
+	// Mark with one or several promises
+	// (or creates a task if no argument provided)
+	addPromise: function( promise ) {
+		if ( promise ) {
+			promise = jQuery.when.apply( jQuery, arguments );
+		}
+		var elements = this,
+			id = taskCounter++,
+			i = elements.length,
+			eTasks;
+		function stop() {
+			jQuery._removePromise( id );
+		}
+		tasks[ id ] = {
+			// elements
+			e: elements,
+			// deferred or promise
+			d: promise
+		};
+		while( i-- ) {
+			eTasks = jQuery.data( elements[ i ], "tasks", undefined, true );
+			if ( !eTasks ) {
+				jQuery.data( elements[ i ], "tasks", ( eTasks = {} ), true );
+			}
+			eTasks[ id ] = true;
+		}
+		if ( promise ) {
+			// We use then so that any Promise/A compliant
+			// implementation can be used here
+			promise.then( stop, stop );
+		}
+		return promise ? this : id;
+	}
+} );
 
 })( jQuery );

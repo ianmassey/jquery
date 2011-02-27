@@ -173,7 +173,9 @@ jQuery.fn.extend({
 			}
 		}
 
-		var self = this;
+		var self = this,
+			pId = self.addPromise(),
+			resolved;
 
 		// Request the remote document
 		jQuery.ajax({
@@ -186,7 +188,7 @@ jQuery.fn.extend({
 				// Store the response as specified by the jqXHR object
 				responseText = jqXHR.responseText;
 				// If successful, inject the HTML into all the matched elements
-				if ( jqXHR.isResolved() ) {
+				if ( ( resolved = jqXHR.isResolved() ) ) {
 					// #4825: Get the actual response in case
 					// a dataFilter is present in ajaxSettings
 					jqXHR.done(function( r ) {
@@ -206,6 +208,8 @@ jQuery.fn.extend({
 						// If not, just inject the full result
 						responseText );
 				}
+				// Notify the end of the action
+				jQuery._removePromise( pId, resolved );
 
 				if ( callback ) {
 					self.each( callback, [ responseText, status, jqXHR ] );
