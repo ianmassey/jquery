@@ -174,7 +174,7 @@ jQuery.fn.extend({
 		}
 
 		var self = this,
-			defer = self.attachPromise();
+			responseText;
 
 		// Request the remote document
 		jQuery.ajax({
@@ -182,17 +182,16 @@ jQuery.fn.extend({
 			type: type,
 			dataType: "html",
 			data: params,
-			// Complete callback (responseText is used internally)
-			complete: function( jqXHR, status, responseText ) {
-				// Store the response as specified by the jqXHR object
-				responseText = jqXHR.responseText;
+			success: function( text ) {
+				// #4825: Get the actual response in case
+				// a dataFilter is present in ajaxSettings
+				responseText = text;
+			},
+			// Complete callback
+			complete: function( jqXHR, status ) {
+				responseText = responseText || jqXHR.responseText;
 				// If successful, inject the HTML into all the matched elements
-				if ( jqXHR.isResolved() ) {
-					// #4825: Get the actual response in case
-					// a dataFilter is present in ajaxSettings
-					jqXHR.done(function( r ) {
-						responseText = r;
-					});
+				if ( responseText ) {
 					// See if a selector was specified
 					self.html( selector ?
 						// Create a dummy div to hold the results
@@ -206,11 +205,6 @@ jQuery.fn.extend({
 
 						// If not, just inject the full result
 						responseText );
-					// Resolve attached defer
-					defer.resolve();
-				} else {
-					// Reject attached defer
-					defer.reject();
 				}
 
 				if ( callback ) {

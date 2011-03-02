@@ -1100,16 +1100,9 @@ test("global ajaxSettings", function() {
 */
 
 test("load(String)", function() {
-	expect(3);
-	var flag;
+	expect(1);
 	stop(); // check if load can be called with only url
-	jQuery('#first').load( url("data/name.html") );
-	jQuery.when( jQuery('#first') ).done(function() {
-		ok( true, "Deferred notified" );
-		flag = true;
-		start();
-	});
-	ok( !flag , "Deferred not immediately resolved" );
+	jQuery('#first').load("data/name.html", start);
 });
 
 test("load('url selector')", function() {
