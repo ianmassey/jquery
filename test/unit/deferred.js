@@ -137,9 +137,9 @@ jQuery.each( [ "", " - new operator" ], function( _, withNew ) {
 	});
 } );
 
-test("jQuery.Deferred.promise and invert", function() {
+test("jQuery.Deferred.promise, jQuery.Deferred.invert", function() {
 
-	expect( 8 );
+	expect( 15 );
 
 	var tmp = jQuery.Deferred(),
 		tmp2 = jQuery.Deferred(),
@@ -148,6 +148,15 @@ test("jQuery.Deferred.promise and invert", function() {
 		flags = {
 			promise: 0,
 			invert: 1
+		},
+		methods = {
+			always: "always",
+			done: "fail",
+			fail: "done",
+			isResolved: "isRejected",
+			isRejected: "isResolved",
+			promise: "invert",
+			invert: "promise"
 		};
 
 	jQuery.each( flags, function( m1, i1 ) {
@@ -157,6 +166,13 @@ test("jQuery.Deferred.promise and invert", function() {
 			ok( tmp[ m ]() === tmp[ m1 ]()[ m2 ](), "deferred." + m1 + "()." + m2 + "() === deferred." + m + "()" );
 		} );
 	} );
+
+	promiseValue = tmp.promise();
+	invertValue = tmp.invert();
+
+	for ( var i in methods ) {
+		strictEqual( promiseValue[ i ], invertValue[ methods[i] ], i + " and " + methods[ i ] + " are inverted" );
+	}
 
 	tmp.resolve( { done: true } );
 	tmp.promise().done(function( value ) {
@@ -325,99 +341,4 @@ test("jQuery.when - joined", function() {
 	} );
 	deferreds.futureSuccess.resolve( 1 );
 	deferreds.futureError.reject( 0 );
-});
-
-test( "jQuery.fn.promise", function() {
-
-	expect( 20 );
-
-	var div = jQuery( "<div><div/><div/><span/><span/></div>" ),
-		divCopy = jQuery( div[ 0 ] ),
-		all = jQuery( "*", div ),
-		divs = jQuery( "div", div ),
-		spans = jQuery( "span", div ),
-		d1,
-		d2,
-		flag;
-
-	div.promise().done(function( object ) {
-		ok( true, "Test a collection with no task is resolved" );
-		ok( object === div, "Test resolve value is the collection" );
-		ok( this === div, "Test resolve context is the collection" );
-	});
-
-	jQuery.when( div ).done(function( object ) {
-		ok( true, "Test a collection with no task is resolved (when)" );
-		ok( object === div, "Test resolve value is the collection (when)" );
-		ok( this === div, "Test resolve context is the collection (when)" );
-	});
-
-	d1 = div.attachPromise();
-	flag = false;
-	divCopy.promise().done(function( object ) {
-		ok( flag, "Test attachPromise with a resolved task works" );
-		ok( object === divCopy, "Test resolve value is the collection" );
-		ok( this === divCopy, "Test resolve context is the collection" );
-	});
-	flag = true;
-	d1.resolve();
-
-	d1 = div.attachPromise();
-	flag = false;
-	divCopy.promise().fail(function() {
-		ok( flag, "Test attachPromise with a rejected task works" );
-	});
-	flag = true;
-	d1.reject();
-
-	d1 = jQuery.Deferred();
-	flag = false;
-	div.attachPromise( d1 );
-	divCopy.promise().done(function() {
-		ok( flag, "Test attachPromise with a resolved deferred works" );
-	});
-	flag = true;
-	d1.resolve();
-
-	d1 = jQuery.Deferred();
-	flag = false;
-	div.attachPromise( d1 );
-	divCopy.promise().fail(function() {
-		ok( flag, "Test attachPromise with a rejected deferred works" );
-	});
-	flag = true;
-	d1.reject();
-
-	d1 = jQuery.Deferred();
-	d2 = jQuery.Deferred();
-	flag = false;
-	div.attachPromise( d1, d2 )
-	divCopy.promise().done(function() {
-		ok( flag, "Test attachPromise with two resolved deferreds (2/2)" );
-		flag = "fired";
-	});
-	flag = true;
-	d1.resolve();
-	ok( flag !== "fired", "Test attachPromise with two resolved deferreds (1/2)" );
-	d2.resolve();
-
-	d1 = jQuery.Deferred();
-	d2 = jQuery.Deferred();
-	divs.attachPromise( d1 );
-	spans.attachPromise( d2 );
-	flag = 1;
-	divs.promise().done(function() {
-		ok( flag++ === 1, "Test divs are resolved with the first deferred" );
-	});
-	spans.promise().done(function() {
-		ok( flag++ === 2, "Test spans are resolved with the second deferred" );
-	});
-	all.promise().done(function() {
-		ok( flag++ === 3, "Test all are resolved with both deferreds" );
-	});
-	ok( flag === 1, "Test multiple deferreds, multiple elements (1/3)" );
-	d1.resolve();
-	ok( flag === 2, "Test multiple deferreds, multiple elements (2/3)" );
-	d2.resolve();
-	ok( flag === 4, "Test multiple deferreds, multiple elements (3/3)" );
 });

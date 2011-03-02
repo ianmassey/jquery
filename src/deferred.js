@@ -10,8 +10,7 @@ function promiseInvertFactory( invert ) {
 				cache = {};
 				for( i in pMethods ) {
 					cache[ i ] = invert ?
-						( pMethods[ i ] && promise[ pMethods[ i ] ] ||
-							pFactories[ i ]( cache ) ) :
+						( pMethods[ i ] && promise[ pMethods[i] ] || pFactories[ i ]( cache ) ) :
 						promise[ i ];
 				}
 			}
@@ -65,7 +64,7 @@ var pFactories = {
 	// Promise methods
 	pMethods = {},
 	iDeferred,
-	sliceDeferred = [].slice;
+	sliceDeferred = Array.prototype.slice;
 
 // Create promise methods list
 for ( iDeferred = 0; iDeferred < oMethods.length; iDeferred += 2 ) {
@@ -82,6 +81,11 @@ for( iDeferred in pFactories ) {
 
 // Constructors
 jQuery.extend({
+
+	// Tell if the given argument is observable through a promise
+	isObservable: function( object ) {
+		return !!object && ( jQuery.type( object.promise ) === "function" );
+	},
 
 	// Create a simple deferred (single callbacks list)
 	_Deferred: function() {
@@ -134,9 +138,7 @@ jQuery.extend({
 				},
 				// resolve with this as context (or promise if available) and given arguments
 				resolve: function() {
-					deferred.resolveWith(
-						jQuery.isFunction( this.promise ) ? this.promise() : this,
-						arguments );
+					deferred.resolveWith( this, arguments );
 					return this;
 				},
 				// Has this deferred been resolved?
@@ -179,121 +181,36 @@ jQuery.extend({
 
 	// Deferred helpers
 	when: function( object ) {
-		var i = arguments.length,
-			deferred = i <= 1 && object && jQuery.isFunction( object.promise ) ?
-				object :
-				jQuery.Deferred(),
-			promise = deferred.promise();
-
+		var args = arguments,
+			i = args.length,
+			defer = i < 2 && jQuery.isObservable( object ) ? object : jQuery.Deferred();
 		if ( i > 1 ) {
-			var array = sliceDeferred.call( arguments, 0 ),
-				count = i,
-				iFunction = function( i ) {
-					array[ i ].promise().then( function( value ) {
-						array[ i ] = arguments.length > 1 ?
-								sliceDeferred.call( arguments, 0 ) : value;
-						if ( !( --count ) ) {
-							deferred.resolveWith( promise, array );
-						}
-					}, deferred.reject );
+			var count = i + 1,
+				resolveIndex = function( index, values ) {
+					if ( index != null  ) {
+						args[ index ] = values.length > 1 ? sliceDeferred.call( values, 0 ) : values[ 0 ];
+					}
+					if ( !( --count ) ) {
+						defer.resolveWith( defer, args );
+					}
 				};
-			while( i-- ) {
-				object = array[ i ];
-				if ( object && jQuery.isFunction( object.promise ) ) {
-					iFunction( i );
+			jQuery.each( args, function( index, object ) {
+				if ( jQuery.isObservable( object ) ) {
+					object.promise().done(function() {
+						resolveIndex( index, arguments );
+					}).fail(function() {
+						defer.rejectWith( defer, arguments );
+					});
 				} else {
 					--count;
 				}
-			}
-			if ( !count ) {
-				deferred.resolveWith( promise, array );
-			}
-		} else if ( deferred !== object ) {
-			deferred.resolve( object );
+			});
+			resolveIndex();
+		} else if ( defer !== object ) {
+			defer.resolveWith( defer, i ? [ object ] : [] );
 		}
-		return promise;
+		return defer.promise();
 	}
 });
-
-// Attach promises to elements
-var eTaskCounter = jQuery.now(),
-	eTasks = {};
-
-jQuery.extend( jQuery.fn, {
-
-	promise: function( object ) {
-		var defer = jQuery.Deferred(),
-			elements = this,
-			i = elements.length,
-			tasks,
-			id,
-			count = 1,
-			checked = {};
-		function resolve() {
-			if ( !( --count ) ) {
-				defer.resolveWith( elements, [ elements ] );
-			}
-		}
-		function reject() {
-			defer.rejectWith( elements, [ elements ] );
-		}
-		while ( i-- ) {
-			tasks = jQuery.data( elements[ i ], "eTasks", undefined, true );
-			if ( tasks ) {
-				for ( id in tasks ) {
-					if ( !checked[ id ] ) {
-						checked[ id ] = true;
-						count++;
-						// We use then so that any Promise/A compliant
-						// implementation can be used here
-						eTasks[ id ].then( resolve, reject );
-					}
-				}
-			}
-		}
-		resolve();
-		return defer.promise( object );
-	},
-
-	// Mark with one or several promises
-	// (or creates a defer and returns it if no argument is provided)
-	attachPromise: function() {
-		var elements = this,
-			id = eTaskCounter++,
-			create = !arguments.length,
-			defer = eTasks[ id ] = create ?
-				jQuery.Deferred() :
-				jQuery.when.apply( jQuery, arguments ),
-			i = elements.length,
-			tasks = [];
-		while( i-- ) {
-			tasks[ i ] = jQuery.data( elements[ i ], "eTasks", undefined, true );
-			if ( !tasks[ i ] ) {
-				jQuery.data( elements[ i ], "eTasks", ( tasks[ i ] = {} ), true );
-			}
-			tasks[ i ][ id ] = true;
-		}
-		// We use then so that any Promise/A compliant
-		// implementation can be used here
-		// Hence the function declaration
-		function done() {
-			delete eTasks[ id ];
-			i = elements.length;
-			while( i-- ) {
-				delete tasks[ i ][ id ];
-				isEmpty = true;
-				for ( var key in tasks[ i ] ) {
-					isEmpty = false;
-					break;
-				}
-				if ( isEmpty ) {
-					jQuery.removeData( elements[ i ], "eTasks", true );
-				}
-			}
-		}
-		defer.then( done, done );
-		return create ? defer : elements;
-	}
-} );
 
 })( jQuery );
