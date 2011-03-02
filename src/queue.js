@@ -53,7 +53,8 @@ jQuery.extend({
 			// Look if we have observers and resolve if needed
 			if (( defer = jQuery.data( elem, type + "defer", undefined, true ) )) {
 				jQuery.removeData( elem, type + "defer", true );
-				defer.resolve();
+				// Give room for hard-coded callbacks to fire first
+				setTimeout( defer.resolve, 0 );
 			}
 		}
 	}
