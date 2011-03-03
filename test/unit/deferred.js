@@ -8,7 +8,7 @@ jQuery.each( [ "", " - new operator" ], function( _, withNew ) {
 
 	test("jQuery._Deferred" + withNew, function() {
 
-		expect( 10 );
+		expect( 11 );
 
 		var deferred,
 			object,
@@ -96,6 +96,12 @@ jQuery.each( [ "", " - new operator" ], function( _, withNew ) {
 
 		deferred.resolveWith( jQuery , [ document ] ).done( function( doc ) {
 			ok( this === jQuery && arguments.length === 1 && doc === document , "Test fire context & args" );
+		});
+
+		// #8421
+		deferred = createDeferred();
+		deferred.resolveWith().done(function() {
+			ok( true, "Test resolveWith can be called with no argument" );
 		});
 	});
 } );

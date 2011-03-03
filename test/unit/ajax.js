@@ -492,7 +492,7 @@ test(".ajax() - hash", function() {
 
 test("jQuery ajax - cross-domain detection", function() {
 
-	expect( 4 );
+	expect( 5 );
 
 	var loc = document.location,
 		otherPort = loc.port === 666 ? 667 : 666,
@@ -503,6 +503,14 @@ test("jQuery ajax - cross-domain detection", function() {
 		url: otherProtocol + "//" + loc.host,
 		beforeSend: function( _ , s ) {
 			ok( s.crossDomain , "Test different protocols are detected as cross-domain" );
+			return false;
+		}
+	});
+
+	jQuery.ajax({
+		url: 'app:/path',
+		beforeSend: function( _ , s ) {
+			ok( s.crossDomain , "Adobe AIR app:/ URL detected as cross-domain" );
 			return false;
 		}
 	});

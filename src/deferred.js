@@ -123,6 +123,8 @@ jQuery.extend({
 				resolveWith: function( context, args ) {
 					var callback;
 					if ( callbacks && !fired && !firing ) {
+						// make sure args are available (#8421)
+						args = args || [];
 						firing = true;
 						try {
 							while( ( callback = callbacks.shift() ) ) {
